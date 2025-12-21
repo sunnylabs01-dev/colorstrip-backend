@@ -9,3 +9,15 @@ __pycache__/
 # venv
 venv/
 .venv/
+
+# tests
+tests/assets/
+tests/**/assets/
+tests/**/*.jpg
+tests/**/*.jpeg
+tests/**/*.png
+tests/**/*.webp
+!tests/assets/README.md
+
+# macOS
+.DS_Store
