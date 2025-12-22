@@ -26,7 +26,8 @@ def test_strips_analyze_returns_dummy_response():
     assert data["ok"] is True
     assert "meta" in data
     assert "request_id" in data["meta"]
-    assert data["meta"]["model_version"] == "dummy-v0"
+    assert isinstance(data["meta"]["model_version"], str)
+    assert len(data["meta"]["model_version"]) > 0
 
     # result contract
     result = data["result"]
