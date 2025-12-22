@@ -9,3 +9,6 @@ __pycache__/
 # venv
 venv/
 .venv/
+
+.DS_Store
+tests/assets/
