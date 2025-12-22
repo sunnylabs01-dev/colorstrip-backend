@@ -1,6 +1,8 @@
+import uuid
 from fastapi import APIRouter, UploadFile, File, HTTPException
+
 from app.schemas.strips import AnalyzeResponse
-from app.services.strips_service import StripsService
+from app.services.strips_service import StripsService, StripAnalyzeInput
 
 router = APIRouter(prefix="/v1/strips", tags=["strips"])
 
@@ -14,4 +16,12 @@ async def analyze_strip(image: UploadFile = File(...)) -> AnalyzeResponse:
     if not content:
         raise HTTPException(status_code=400, detail="Empty file.")
 
-    return StripsService.analyze_dummy(filename=image.filename or "unknown", size_bytes=len(content))
+    request_id = str(uuid.uuid4())
+
+    input_ = StripAnalyzeInput(
+        image_bytes=content,
+        filename=image.filename,
+        content_type=image.content_type,
+    )
+
+    return StripsService.analyze(input_=input_, request_id=request_id)
