@@ -1,27 +1,12 @@
-import uuid
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File
 
-from app.schemas.strips import AnalyzeResponse
-from app.services.strips_service import StripsService, StripAnalyzeInput
+from app.services.strips_service import StripsService
 
-router = APIRouter(prefix="/v1/strips", tags=["strips"])
+router = APIRouter(prefix="/strips", tags=["strips"])
+
+service = StripsService()
 
 
-@router.post("/analyze", response_model=AnalyzeResponse)
-async def analyze_strip(image: UploadFile = File(...)) -> AnalyzeResponse:
-    if not image.content_type or not image.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Only image uploads are supported.")
-
-    content = await image.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="Empty file.")
-
-    request_id = str(uuid.uuid4())
-
-    input_ = StripAnalyzeInput(
-        image_bytes=content,
-        filename=image.filename,
-        content_type=image.content_type,
-    )
-
-    return StripsService.analyze(input_=input_, request_id=request_id)
+@router.post("/analyze")
+async def analyze(image: UploadFile = File(...)):
+    return await service.analyze(image=image)
