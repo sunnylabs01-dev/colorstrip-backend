@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from app.routers.health import router as health_router
 from app.routers.strips import router as strips_router
+from app.routers.debug import router as debug_router
 from app.core.middleware import RequestIdMiddleware
 
 from fastapi.exceptions import RequestValidationError
@@ -29,4 +30,5 @@ app.add_exception_handler(Exception, unhandled_exception_handler)
 # Routers
 app.include_router(health_router)
 app.include_router(strips_router)
+app.include_router(debug_router)
 
