@@ -5,6 +5,15 @@ from typing import Optional, Literal, Any
 
 from app.core.exceptions import RequestError, AnalysisError, UpstreamError
 from app.schemas.strips import AnalyzeMeta, AnalyzeResult, AnalyzeResponse
+from app.core.error_codes import (
+    REQ_EMPTY_IMAGE_BYTES,
+    REQ_IMAGE_BYTES_TOO_SMALL,
+    UPSTREAM_VISION_TIMEOUT,
+    UPSTREAM_VISION_FAILED,
+    ANALYSIS_INVALID_RESULT,
+    ANALYSIS_OPENCV_FAILED,
+    ANALYSIS_NO_VALID_CANDIDATE,
+)
 
 
 # -----------------------
@@ -102,13 +111,13 @@ class StripsService:
     def _validate_input(input_: StripAnalyzeInput) -> None:
         if not input_.image_bytes:
             raise RequestError(
-                code="REQ_EMPTY_IMAGE_BYTES",
+                code=REQ_EMPTY_IMAGE_BYTES,
                 message="Uploaded image file is empty",
             )
 
         if len(input_.image_bytes) < 10:
             raise RequestError(
-                code="REQ_IMAGE_BYTES_TOO_SMALL",
+                code=REQ_IMAGE_BYTES_TOO_SMALL,
                 message="Uploaded image file is too small",
                 details={"size_bytes": len(input_.image_bytes)},
             )
@@ -143,14 +152,14 @@ class StripsService:
             cand = Candidate(source="vision", result=dummy, confidence=0.6)
 
             if not StripsService._is_valid(cand.result):
-                ctx.add_failure(stage, "ANALYSIS_INVALID_RESULT", "Vision produced invalid result")
+                ctx.add_failure(stage, ANALYSIS_INVALID_RESULT, "Vision produced invalid result")
                 return None
 
             return cand
 
         except TimeoutError as e:
             # Vision timeout은 보통 retryable. 여기서는 "soft fail"로 기록하고 OpenCV로 넘어감.
-            ctx.add_failure(stage, "UPSTREAM_VISION_TIMEOUT", "Vision inference timed out", {"reason": str(e)})
+            ctx.add_failure(stage, UPSTREAM_VISION_TIMEOUT, "Vision inference timed out", {"reason": str(e)})
             return None
 
         except UpstreamError as e:
@@ -160,7 +169,7 @@ class StripsService:
 
         except Exception as e:
             # 파싱 실패/예상치 못한 에러도 OpenCV fallback을 위해 soft fail 처리
-            ctx.add_failure(stage, "UPSTREAM_VISION_FAILED", "Vision inference failed", {"reason": str(e)})
+            ctx.add_failure(stage, UPSTREAM_VISION_FAILED, "Vision inference failed", {"reason": str(e)})
             return None
 
     # -----------------------
@@ -184,13 +193,13 @@ class StripsService:
             cand = Candidate(source="opencv", result=dummy, confidence=0.4)
 
             if not StripsService._is_valid(cand.result):
-                ctx.add_failure(stage, "ANALYSIS_INVALID_RESULT", "OpenCV produced invalid result")
+                ctx.add_failure(stage, ANALYSIS_INVALID_RESULT, "OpenCV produced invalid result")
                 return None
 
             return cand
 
         except Exception as e:
-            ctx.add_failure(stage, "ANALYSIS_OPENCV_FAILED", "OpenCV analysis failed", {"reason": str(e)})
+            ctx.add_failure(stage, ANALYSIS_OPENCV_FAILED, "OpenCV analysis failed", {"reason": str(e)})
             return None
 
     # -----------------------

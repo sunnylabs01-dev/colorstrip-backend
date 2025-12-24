@@ -7,6 +7,10 @@ from fastapi.responses import JSONResponse
 
 from app.core.exceptions import AppError
 from app.models.error_models import ErrorResponse, ErrorDetail
+from app.core.error_codes import (
+    REQ_VALIDATION_FAILED,
+    INTERNAL_UNHANDLED,
+)
 
 
 async def app_error_handler(request: Request, exc: AppError):
@@ -44,7 +48,7 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
         request_id=request_id,
         ok=False,
         error=ErrorDetail(
-            code="REQ_VALIDATION_FAILED",
+            code=REQ_VALIDATION_FAILED,
             message="Request validation failed",
             details={"field_errors": field_errors},
             retryable=False,
@@ -64,7 +68,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         request_id=request_id,
         ok=False,
         error=ErrorDetail(
-            code="INTERNAL_UNHANDLED",
+            code=INTERNAL_UNHANDLED,
             message="Internal server error",
             retryable=False,
         ),
