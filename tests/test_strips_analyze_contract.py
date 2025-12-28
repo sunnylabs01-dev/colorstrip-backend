@@ -7,7 +7,7 @@ client = TestClient(app)
 def test_analyze_contract_without_real_image_file():
     # No real image file: just bytes + image/* content-type
     res = client.post(
-        "/v1/strips/analyze",
+        "/strips/analyze",
         files={"image": ("fake.jpg", b"not-a-real-jpeg", "image/jpeg")},
     )
 
@@ -42,17 +42,21 @@ def test_analyze_contract_without_real_image_file():
 
 def test_analyze_rejects_non_image_content_type():
     res = client.post(
-        "/v1/strips/analyze",
+        "/strips/analyze",
         files={"image": ("not_image.txt", b"hello", "text/plain")},
     )
-    assert res.status_code == 400
-    assert res.json()["detail"] == "Only image uploads are supported."
+    body = res.json()
+    assert body["ok"] is False
+    assert body["error"]["code"] == "REQ_UNSUPPORTED_MEDIA_TYPE"
+    assert body["error"]["message"] == "Only image uploads are supported."
 
 
 def test_analyze_rejects_empty_file():
     res = client.post(
-        "/v1/strips/analyze",
+        "/strips/analyze",
         files={"image": ("empty.jpg", b"", "image/jpeg")},
     )
-    assert res.status_code == 400
-    assert res.json()["detail"] == "Empty file."
+    body = res.json()
+    assert body["error"]["code"] == "REQ_EMPTY_IMAGE_BYTES"
+    assert body["error"]["message"] == "Uploaded image file is empty"
+

@@ -1,27 +1,29 @@
-import uuid
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, Request
 
+from app.core.exceptions import RequestError
+from app.core.error_codes import REQ_UNSUPPORTED_MEDIA_TYPE
 from app.schemas.strips import AnalyzeResponse
 from app.services.strips_service import StripsService, StripAnalyzeInput
 
-router = APIRouter(prefix="/v1/strips", tags=["strips"])
+router = APIRouter(prefix="/strips", tags=["strips"])
+
+service = StripsService()
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
-async def analyze_strip(image: UploadFile = File(...)) -> AnalyzeResponse:
-    if not image.content_type or not image.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Only image uploads are supported.")
-
-    content = await image.read()
-    if not content:
-        raise HTTPException(status_code=400, detail="Empty file.")
-
-    request_id = str(uuid.uuid4())
-
+async def analyze(request: Request, image: UploadFile = File(...)):
+    if image.content_type not in ("image/jpeg", "image/png"):
+        raise RequestError(
+            code=REQ_UNSUPPORTED_MEDIA_TYPE,
+            message="Only image uploads are supported.",
+            details={"content_type": image.content_type},
+        )
+    image_bytes = await image.read()
     input_ = StripAnalyzeInput(
-        image_bytes=content,
+        image_bytes=image_bytes,
         filename=image.filename,
         content_type=image.content_type,
     )
 
-    return StripsService.analyze(input_=input_, request_id=request_id)
+    request_id = request.state.request_id
+    return service.analyze(input_=input_, request_id=request_id)
