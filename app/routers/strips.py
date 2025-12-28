@@ -26,4 +26,4 @@ async def analyze(request: Request, image: UploadFile = File(...)):
     )
 
     request_id = request.state.request_id
-    return service.analyze(input_=input_, request_id=request_id)
+    return await service.analyze(input_=input_, request_id=request_id)
