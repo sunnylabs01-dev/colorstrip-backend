@@ -19,5 +19,8 @@ tests/**/*.png
 tests/**/*.webp
 !tests/assets/README.md
 
+# Local dev artifacts
+tmp/
+
 # macOS
 .DS_Store
