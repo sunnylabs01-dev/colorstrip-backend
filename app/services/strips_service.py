@@ -69,28 +69,29 @@ class StripsService:
       5) if no valid candidate -> fallback (or raise)
     """
 
-    @staticmethod
-    def analyze(input_: StripAnalyzeInput, request_id: str) -> AnalyzeResponse:
+    async def analyze(self, input_: StripAnalyzeInput, request_id: str) -> AnalyzeResponse:
         ctx = PipelineContext()
 
         # 1) validate input
-        StripsService._validate_input(input_)
+        self._validate_input(input_)
 
         # 2) candidates
-        vision_cand = StripsService._run_vision_candidate(input_, ctx)
-        opencv_cand = StripsService._run_opencv_candidate(input_, ctx)
+        # NOTE: 지금은 더미 구현이라 await가 필요 없지만,
+        #       추후 Vision API 호출이 async가 되면 아래 두 줄이 await로 바뀔 예정.
+        vision_cand = await self._run_vision_candidate(input_, ctx)
+        opencv_cand = self._run_opencv_candidate(input_, ctx)
 
         # 3) select best
-        best = StripsService._select_best([vision_cand, opencv_cand])
+        best = self._select_best([vision_cand, opencv_cand])
 
         # 4) fallback or raise
         if best is None:
             # 정책 A: fallback 유지
-            best = StripsService._fallback()
+            best = self._fallback()
 
             # 정책 B(대안): 완전 실패를 422로 올리고 싶으면 아래로 교체
             # raise AnalysisError(
-            #     code="ANALYSIS_NO_VALID_CANDIDATE",
+            #     code=ANALYSIS_NO_VALID_CANDIDATE,
             #     message="Failed to produce a valid analysis result",
             #     details=ctx.to_details(),
             # )
@@ -107,8 +108,7 @@ class StripsService:
     # Stage 0: validation
     # -----------------------
 
-    @staticmethod
-    def _validate_input(input_: StripAnalyzeInput) -> None:
+    def _validate_input(self, input_: StripAnalyzeInput) -> None:
         if not input_.image_bytes:
             raise RequestError(
                 code=REQ_EMPTY_IMAGE_BYTES,
@@ -135,8 +135,7 @@ class StripsService:
     # Stage 1: vision
     # -----------------------
 
-    @staticmethod
-    def _run_vision_candidate(input_: StripAnalyzeInput, ctx: PipelineContext) -> Optional[Candidate]:
+    async def _run_vision_candidate(self, input_: StripAnalyzeInput, ctx: PipelineContext) -> Optional[Candidate]:
         stage = "vision"
         ctx.add_attempt(stage)
 
@@ -151,7 +150,7 @@ class StripsService:
             )
             cand = Candidate(source="vision", result=dummy, confidence=0.6)
 
-            if not StripsService._is_valid(cand.result):
+            if not self._is_valid(cand.result):
                 ctx.add_failure(stage, ANALYSIS_INVALID_RESULT, "Vision produced invalid result")
                 return None
 
@@ -176,8 +175,7 @@ class StripsService:
     # Stage 2: opencv
     # -----------------------
 
-    @staticmethod
-    def _run_opencv_candidate(input_: StripAnalyzeInput, ctx: PipelineContext) -> Optional[Candidate]:
+    def _run_opencv_candidate(self, input_: StripAnalyzeInput, ctx: PipelineContext) -> Optional[Candidate]:
         stage = "opencv"
         ctx.add_attempt(stage)
 
@@ -192,7 +190,7 @@ class StripsService:
             )
             cand = Candidate(source="opencv", result=dummy, confidence=0.4)
 
-            if not StripsService._is_valid(cand.result):
+            if not self._is_valid(cand.result):
                 ctx.add_failure(stage, ANALYSIS_INVALID_RESULT, "OpenCV produced invalid result")
                 return None
 
@@ -206,9 +204,8 @@ class StripsService:
     # Stage 3: selection
     # -----------------------
 
-    @staticmethod
-    def _select_best(cands: list[Optional[Candidate]]) -> Optional[Candidate]:
-        valid = [c for c in cands if c is not None and StripsService._is_valid(c.result)]
+    def _select_best(self, cands: list[Optional[Candidate]]) -> Optional[Candidate]:
+        valid = [c for c in cands if c is not None and self._is_valid(c.result)]
         if not valid:
             return None
 
@@ -227,8 +224,7 @@ class StripsService:
     # Stage 4: fallback
     # -----------------------
 
-    @staticmethod
-    def _fallback() -> Candidate:
+    def _fallback(self) -> Candidate:
         dummy = AnalyzeResult(
             value_ppm=None,
             unit="ppm",
