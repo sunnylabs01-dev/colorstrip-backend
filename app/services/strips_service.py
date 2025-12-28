@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Optional, Literal, Any
+import cv2
+import numpy as np
 
 from app.core.exceptions import RequestError, AnalysisError, UpstreamError
 from app.schemas.strips import AnalyzeMeta, AnalyzeResult, AnalyzeResponse
@@ -14,6 +16,8 @@ from app.core.error_codes import (
     ANALYSIS_OPENCV_FAILED,
     ANALYSIS_NO_VALID_CANDIDATE,
 )
+
+from app.vision.opencv_boundary_v1 import find_pink_boundary_y_v1, BoundaryV1Config
 
 
 # -----------------------
@@ -142,15 +146,45 @@ class StripsService:
         ctx.add_attempt(stage)
 
         try:
-            # TODO: 실제 OpenCV decode + boundary/ticks detection 자리
-            dummy = AnalyzeResult(
-                value_ppm=41.0,
+            # 1) decode bytes -> BGR
+            arr = np.frombuffer(input_.image_bytes, dtype=np.uint8)
+            bgr = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            if bgr is None or bgr.size == 0:
+                raise ValueError("Failed to decode image bytes with OpenCV")
+
+            # 2) run boundary detection v1
+            boundary = find_pink_boundary_y_v1(bgr, BoundaryV1Config())
+
+            if not boundary.found or boundary.y is None or boundary.roi is None:
+                ctx.add_failure(
+                    stage,
+                    ANALYSIS_OPENCV_FAILED,
+                    "OpenCV boundary detection returned no result",
+                    {
+                        "boundary_found": boundary.found,
+                        "debug": boundary.debug,
+                        "roi": boundary.roi,
+                    },
+                )
+                return None
+
+            # 3) v1 placeholder: relative_position as normalized boundary location within ROI (0~1)
+            x1, y1, x2, y2 = boundary.roi
+            denom = max(1, (y2 - y1))
+            relative_position = (boundary.y - y1) / float(denom)
+            # clamp
+            relative_position = max(0.0, min(1.0, relative_position))
+
+            # 아직 tick/ppm 계산은 안 하므로 None으로 둔다 (v2에서 채울 예정)
+            result = AnalyzeResult(
+                value_ppm=None,
                 unit="ppm",
-                lower_tick=40,
-                upper_tick=50,
-                relative_position=0.1,
+                lower_tick=None,
+                upper_tick=None,
+                relative_position=relative_position,
             )
-            cand = Candidate(source="opencv", result=dummy, confidence=0.4)
+
+            cand = Candidate(source="opencv", result=result, confidence=0.5)
 
             if not self._is_valid(cand.result):
                 ctx.add_failure(stage, ANALYSIS_INVALID_RESULT, "OpenCV produced invalid result")
@@ -161,6 +195,7 @@ class StripsService:
         except Exception as e:
             ctx.add_failure(stage, ANALYSIS_OPENCV_FAILED, "OpenCV analysis failed", {"reason": str(e)})
             return None
+
 
     # -----------------------
     # Stage 2: vision (future)
