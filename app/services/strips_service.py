@@ -78,7 +78,7 @@ class StripsService:
         # 2) candidates
         # NOTE: 지금은 더미 구현이라 await가 필요 없지만,
         #       추후 Vision API 호출이 async가 되면 아래 두 줄이 await로 바뀔 예정.
-        vision_cand = self._run_vision_candidate(input_, ctx)
+        vision_cand = await self._run_vision_candidate(input_, ctx)
         opencv_cand = self._run_opencv_candidate(input_, ctx)
 
         # 3) select best
@@ -135,7 +135,7 @@ class StripsService:
     # Stage 1: vision
     # -----------------------
 
-    def _run_vision_candidate(self, input_: StripAnalyzeInput, ctx: PipelineContext) -> Optional[Candidate]:
+    async def _run_vision_candidate(self, input_: StripAnalyzeInput, ctx: PipelineContext) -> Optional[Candidate]:
         stage = "vision"
         ctx.add_attempt(stage)
 
