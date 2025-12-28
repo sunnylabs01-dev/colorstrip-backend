@@ -43,5 +43,7 @@ def test_strips_analyze_rejects_non_image_upload():
         "/strips/analyze",
         files={"image": ("not_image.txt", b"hello", "text/plain")},
     )
-    assert res.status_code == 400
-    assert res.json()["detail"] == "Only image uploads are supported."
+    body = res.json()
+    assert body["ok"] is False
+    assert body["error"]["code"] == "REQ_UNSUPPORTED_MEDIA_TYPE"
+    assert body["error"]["message"] == "Only image uploads are supported."
