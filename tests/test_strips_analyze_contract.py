@@ -7,7 +7,7 @@ client = TestClient(app)
 def test_analyze_contract_without_real_image_file():
     # No real image file: just bytes + image/* content-type
     res = client.post(
-        "/v1/strips/analyze",
+        "/strips/analyze",
         files={"image": ("fake.jpg", b"not-a-real-jpeg", "image/jpeg")},
     )
 
@@ -42,7 +42,7 @@ def test_analyze_contract_without_real_image_file():
 
 def test_analyze_rejects_non_image_content_type():
     res = client.post(
-        "/v1/strips/analyze",
+        "/strips/analyze",
         files={"image": ("not_image.txt", b"hello", "text/plain")},
     )
     assert res.status_code == 400
@@ -51,7 +51,7 @@ def test_analyze_rejects_non_image_content_type():
 
 def test_analyze_rejects_empty_file():
     res = client.post(
-        "/v1/strips/analyze",
+        "/strips/analyze",
         files={"image": ("empty.jpg", b"", "image/jpeg")},
     )
     assert res.status_code == 400

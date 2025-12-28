@@ -15,7 +15,7 @@ def test_strips_analyze_returns_dummy_response():
 
     with image_path.open("rb") as f:
         res = client.post(
-            "/v1/strips/analyze",
+            "/strips/analyze",
             files={"image": ("visiontest.jpeg", f, "image/jpeg")},
         )
 
@@ -40,7 +40,7 @@ def test_strips_analyze_returns_dummy_response():
 
 def test_strips_analyze_rejects_non_image_upload():
     res = client.post(
-        "/v1/strips/analyze",
+        "/strips/analyze",
         files={"image": ("not_image.txt", b"hello", "text/plain")},
     )
     assert res.status_code == 400
