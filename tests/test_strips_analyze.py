@@ -9,7 +9,7 @@ client = TestClient(app)
 ASSETS_DIR = Path(__file__).parent / "assets"
 
 
-def test_strips_analyze_returns_dummy_response():
+def test_strips_analyze_returns_success_contract():
     image_path = ASSETS_DIR / "visiontest.jpeg"
     assert image_path.exists(), f"Missing test image: {image_path}"
 
@@ -26,16 +26,29 @@ def test_strips_analyze_returns_dummy_response():
     assert data["ok"] is True
     assert "meta" in data
     assert "request_id" in data["meta"]
+    assert isinstance(data["meta"]["request_id"], str)
     assert isinstance(data["meta"]["model_version"], str)
     assert len(data["meta"]["model_version"]) > 0
 
     # result contract
     result = data["result"]
     assert result["unit"] == "ppm"
-    assert result["lower_tick"] == 40
-    assert result["upper_tick"] == 50
-    assert result["relative_position"] == 0.2
-    assert result["value_ppm"] == 42.0
+
+    # ticks should either be both set or both None
+    assert (result["lower_tick"] is None) == (result["upper_tick"] is None)
+
+    # if ticks exist, they should be ints
+    if result["lower_tick"] is not None:
+        assert isinstance(result["lower_tick"], int)
+        assert isinstance(result["upper_tick"], int)
+
+    # relative_position: None or [0, 1]
+    rp = result["relative_position"]
+    assert (rp is None) or (0.0 <= rp <= 1.0)
+
+    # value_ppm: None or number
+    v = result["value_ppm"]
+    assert (v is None) or isinstance(v, (int, float))
 
 
 def test_strips_analyze_rejects_non_image_upload():

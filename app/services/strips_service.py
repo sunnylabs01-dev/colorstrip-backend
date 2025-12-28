@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Optional, Literal, Any
+import cv2
+import numpy as np
 
 from app.core.exceptions import RequestError, AnalysisError, UpstreamError
 from app.schemas.strips import AnalyzeMeta, AnalyzeResult, AnalyzeResponse
@@ -14,6 +16,8 @@ from app.core.error_codes import (
     ANALYSIS_OPENCV_FAILED,
     ANALYSIS_NO_VALID_CANDIDATE,
 )
+
+from app.vision.opencv_boundary_v1 import find_pink_boundary_y_v1, BoundaryV1Config
 
 
 # -----------------------
@@ -61,10 +65,10 @@ class PipelineContext:
 
 class StripsService:
     """
-    Pipeline v1 (refactored):
+    Pipeline v1 (opencv-first baseline):
       1) validate input (bytes-level)
-      2) run vision candidate (soft-fail -> record failure -> continue)
-      3) run opencv candidate (soft-fail -> record failure -> continue)
+      2) run opencv candidate (soft-fail -> record failure -> continue)
+      3) (optional / future) run vision candidate to refine/override opencv
       4) select best
       5) if no valid candidate -> fallback (or raise)
     """
@@ -75,14 +79,16 @@ class StripsService:
         # 1) validate input
         self._validate_input(input_)
 
-        # 2) candidates
-        # NOTE: 지금은 더미 구현이라 await가 필요 없지만,
-        #       추후 Vision API 호출이 async가 되면 아래 두 줄이 await로 바뀔 예정.
-        vision_cand = await self._run_vision_candidate(input_, ctx)
+        # 2) candidates (opencv-first baseline)
         opencv_cand = self._run_opencv_candidate(input_, ctx)
 
+        # Vision은 v2에서 "refine/override layer"로 추가 예정.
+        # 아직은 OpenCV v1 완성에 집중하기 위해 비활성화한다.
+        vision_cand: Optional[Candidate] = None
+        # vision_cand = await self._run_vision_candidate(input_, ctx)
+
         # 3) select best
-        best = self._select_best([vision_cand, opencv_cand])
+        best = self._select_best([opencv_cand, vision_cand])
 
         # 4) fallback or raise
         if best is None:
@@ -132,7 +138,67 @@ class StripsService:
         #     )
 
     # -----------------------
-    # Stage 1: vision
+    # Stage 1: opencv (baseline)
+    # -----------------------
+
+    def _run_opencv_candidate(self, input_: StripAnalyzeInput, ctx: PipelineContext) -> Optional[Candidate]:
+        stage = "opencv"
+        ctx.add_attempt(stage)
+
+        try:
+            # 1) decode bytes -> BGR
+            arr = np.frombuffer(input_.image_bytes, dtype=np.uint8)
+            bgr = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            if bgr is None or bgr.size == 0:
+                raise ValueError("Failed to decode image bytes with OpenCV")
+
+            # 2) run boundary detection v1
+            boundary = find_pink_boundary_y_v1(bgr, BoundaryV1Config())
+
+            if not boundary.found or boundary.y is None or boundary.roi is None:
+                ctx.add_failure(
+                    stage,
+                    ANALYSIS_OPENCV_FAILED,
+                    "OpenCV boundary detection returned no result",
+                    {
+                        "boundary_found": boundary.found,
+                        "debug": boundary.debug,
+                        "roi": boundary.roi,
+                    },
+                )
+                return None
+
+            # 3) v1 placeholder: relative_position as normalized boundary location within ROI (0~1)
+            x1, y1, x2, y2 = boundary.roi
+            denom = max(1, (y2 - y1))
+            relative_position = (boundary.y - y1) / float(denom)
+            # clamp
+            relative_position = max(0.0, min(1.0, relative_position))
+
+            # 아직 tick/ppm 계산은 안 하므로 None으로 둔다 (v2에서 채울 예정)
+            result = AnalyzeResult(
+                value_ppm=None,
+                unit="ppm",
+                lower_tick=None,
+                upper_tick=None,
+                relative_position=relative_position,
+            )
+
+            cand = Candidate(source="opencv", result=result, confidence=0.5)
+
+            if not self._is_valid(cand.result):
+                ctx.add_failure(stage, ANALYSIS_INVALID_RESULT, "OpenCV produced invalid result")
+                return None
+
+            return cand
+
+        except Exception as e:
+            ctx.add_failure(stage, ANALYSIS_OPENCV_FAILED, "OpenCV analysis failed", {"reason": str(e)})
+            return None
+
+
+    # -----------------------
+    # Stage 2: vision (future)
     # -----------------------
 
     async def _run_vision_candidate(self, input_: StripAnalyzeInput, ctx: PipelineContext) -> Optional[Candidate]:
@@ -169,35 +235,6 @@ class StripsService:
         except Exception as e:
             # 파싱 실패/예상치 못한 에러도 OpenCV fallback을 위해 soft fail 처리
             ctx.add_failure(stage, UPSTREAM_VISION_FAILED, "Vision inference failed", {"reason": str(e)})
-            return None
-
-    # -----------------------
-    # Stage 2: opencv
-    # -----------------------
-
-    def _run_opencv_candidate(self, input_: StripAnalyzeInput, ctx: PipelineContext) -> Optional[Candidate]:
-        stage = "opencv"
-        ctx.add_attempt(stage)
-
-        try:
-            # TODO: 실제 OpenCV decode + boundary/ticks detection 자리
-            dummy = AnalyzeResult(
-                value_ppm=41.0,
-                unit="ppm",
-                lower_tick=40,
-                upper_tick=50,
-                relative_position=0.1,
-            )
-            cand = Candidate(source="opencv", result=dummy, confidence=0.4)
-
-            if not self._is_valid(cand.result):
-                ctx.add_failure(stage, ANALYSIS_INVALID_RESULT, "OpenCV produced invalid result")
-                return None
-
-            return cand
-
-        except Exception as e:
-            ctx.add_failure(stage, ANALYSIS_OPENCV_FAILED, "OpenCV analysis failed", {"reason": str(e)})
             return None
 
     # -----------------------
