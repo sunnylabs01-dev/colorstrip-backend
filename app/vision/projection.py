@@ -53,6 +53,9 @@ def first_row_meeting_m_of_k(
     """
     Find earliest y such that among rows [y, y+k), at least m rows satisfy:
       (ratio >= min_row_ratio) OR (counts >= min_pixels_per_row)
+
+    IMPORTANT: return the FIRST satisfied row inside that window
+               (not the window start), to avoid biasing boundary upward.
     """
     k = cfg.window_k
     m = cfg.require_m
@@ -62,8 +65,11 @@ def first_row_meeting_m_of_k(
 
     ok = (ratio >= cfg.min_row_ratio) | (counts >= cfg.min_pixels_per_row)
 
-    # sliding window count of ok's (simple O(n*k) is fine for ROI heights ~ few hundred)
     for y in range(0, n - k + 1):
-        if int(ok[y:y+k].sum()) >= m:
-            return y
+        window = ok[y : y + k]
+        if int(window.sum()) >= m:
+            # return first True index within window
+            first_idx = int(np.argmax(window))  # safe because window has >=1 True
+            return y + first_idx
+
     return None
