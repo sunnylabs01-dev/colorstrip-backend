@@ -52,58 +52,115 @@ def _stack_debug(roi_bgr: np.ndarray, mask: np.ndarray, overlay: np.ndarray) -> 
 def _draw_row_ratio_signal(
     row_ratio: np.ndarray,
     *,
+    row_ratio_smooth: np.ndarray | None,
     boundary_y: int | None,
     threshold: float,
-    height: int = 200,
-    width: int = 600,
+    peak_y: int | None = None,
+    onset_thr: float | None = None,
+    height: int = 220,
+    width: int = 700,
 ) -> np.ndarray:
     """
     Draw 1D row_ratio signal as an image.
     x-axis: row index (top -> bottom)
     y-axis: ratio magnitude
+    - black: raw ratio
+    - gray: smoothed ratio (if provided)
+    - red: threshold line
+    - green: boundary line
+    - blue: peak line (optional)
     """
     n = len(row_ratio)
     canvas = np.ones((height, width, 3), dtype=np.uint8) * 255
+    if n == 0:
+        cv2.putText(canvas, "empty signal", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
+        return canvas
 
-    # normalize x scale
     xs = (np.arange(n) / max(1, n - 1) * (width - 1)).astype(int)
 
-    # normalize y scale
-    max_val = max(row_ratio.max(), threshold * 1.5, 1e-6)
+    # scaling
+    max_val = float(max(row_ratio.max(), threshold * 1.5, 1e-6))
+    if row_ratio_smooth is not None and len(row_ratio_smooth) == n:
+        max_val = float(max(max_val, row_ratio_smooth.max()))
 
     def y_of(val: float) -> int:
         return int(height - 1 - (val / max_val) * (height - 1))
 
-    # draw signal
+    # raw signal (black)
     for i in range(1, n):
-        x0, x1 = xs[i - 1], xs[i]
-        y0, y1 = y_of(row_ratio[i - 1]), y_of(row_ratio[i])
-        cv2.line(canvas, (x0, y0), (x1, y1), (0, 0, 0), 1)
+        cv2.line(
+            canvas,
+            (xs[i - 1], y_of(float(row_ratio[i - 1]))),
+            (xs[i], y_of(float(row_ratio[i]))),
+            (0, 0, 0),
+            1,
+        )
 
-    # threshold line
-    y_thr = y_of(threshold)
+    # smoothed signal (gray)
+    if row_ratio_smooth is not None and len(row_ratio_smooth) == n:
+        for i in range(1, n):
+            cv2.line(
+                canvas,
+                (xs[i - 1], y_of(float(row_ratio_smooth[i - 1]))),
+                (xs[i], y_of(float(row_ratio_smooth[i]))),
+                (150, 150, 150),
+                1,
+            )
+
+    # threshold line (red)
+    y_thr = y_of(float(threshold))
     cv2.line(canvas, (0, y_thr), (width - 1, y_thr), (0, 0, 255), 1)
     cv2.putText(
         canvas,
-        f"threshold={threshold:.4f}",
+        f"thr={threshold:.4f}",
         (5, max(15, y_thr - 5)),
         cv2.FONT_HERSHEY_SIMPLEX,
-        0.4,
+        0.45,
         (0, 0, 255),
         1,
         cv2.LINE_AA,
     )
 
-    # boundary line
+    # onset threshold (orange-ish) if provided
+    if onset_thr is not None:
+        y_on = y_of(float(onset_thr))
+        cv2.line(canvas, (0, y_on), (width - 1, y_on), (0, 165, 255), 1)
+        cv2.putText(
+            canvas,
+            f"onset_thr={onset_thr:.4f}",
+            (5, min(height - 5, y_on + 15)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            (0, 165, 255),
+            1,
+            cv2.LINE_AA,
+        )
+
+    # peak line (blue)
+    if peak_y is not None and peak_y >= 0:
+        x_p = xs[min(int(peak_y), n - 1)]
+        cv2.line(canvas, (x_p, 0), (x_p, height - 1), (255, 0, 0), 1)
+        cv2.putText(
+            canvas,
+            f"peak={peak_y}",
+            (min(x_p + 5, width - 120), 15),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            (255, 0, 0),
+            1,
+            cv2.LINE_AA,
+        )
+
+    # boundary line (green)
     if boundary_y is not None and boundary_y >= 0:
-        x_b = xs[min(boundary_y, n - 1)]
+        x_b = xs[min(int(boundary_y), n - 1)]
         cv2.line(canvas, (x_b, 0), (x_b, height - 1), (0, 200, 0), 1)
         cv2.putText(
             canvas,
-            f"boundary_y={boundary_y}",
-            (min(x_b + 5, width - 120), 15),
+            f"boundary={boundary_y}",
+            (min(x_b + 5, width - 170), 35),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.4,
+            0.45,
             (0, 200, 0),
             1,
             cv2.LINE_AA,
@@ -245,10 +302,19 @@ def main() -> int:
     _save_csv(base.with_suffix(".row_ratio.csv"), result.row_ratio.astype(np.float32), fmt="%.6f")
 
     # --- save row_ratio signal image ---
+    peak_y = None
+    onset_thr = None
+    if isinstance(getattr(result, "debug", None), dict):
+        peak_y = result.debug.get("peak_y", None)
+        onset_thr = result.debug.get("onset_thr", None)
+
     signal_img = _draw_row_ratio_signal(
         result.row_ratio,
+        row_ratio_smooth=getattr(result, "row_ratio_smooth", None),
         boundary_y=result.boundary_y if result.boundary_y >= 0 else None,
-        threshold=proj_cfg.min_row_ratio,
+        threshold=proj_cfg.min_row_ratio,  # fallback 기준선도 같이 보여주기
+        peak_y=peak_y if peak_y is not None else None,
+        onset_thr=onset_thr if onset_thr is not None else None,
     )
     cv2.imwrite(str(base.with_suffix(".signal.jpg")), signal_img)
 
