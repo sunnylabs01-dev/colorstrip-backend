@@ -30,11 +30,15 @@ class PeakBoundaryConfig:
     peak_prominence: float = 0.008        # peak must stand out from baseline
 
     # onset detection (boundary is onset before the main peak)
-    onset_ratio: float = 0.004            # onset threshold on smoothed ratio
-    onset_run: int = 3                    # require onset to hold for N rows
+    onset_ratio: float = 0.010            # onset threshold on smoothed ratio
+    onset_run: int = 4                    # require onset to hold for N rows
 
     # onset search range relative to peak (avoid picking early noise far above)
-    onset_lookback: int = 260             # rows to look back from peak
+    onset_lookback: int = 200             # rows to look back from peak
+
+    slope_window: int = 9
+    slope_thr: float = 0.0015
+
 
 
 def _center_band(mask: np.ndarray, cfg: ProjectionConfig) -> np.ndarray:
@@ -152,7 +156,16 @@ def find_peak_onset_boundary(
     y0 = max(0, peak_y - cfg.onset_lookback)
     y1 = peak_y
 
-    ok = s >= onset_thr
+    # --- slope-based onset: look for "meaningful rise" before peak ---
+    s2 = smooth_1d(s, cfg.slope_window)  # extra smoothing for slope stability
+    ds = np.diff(s2, prepend=s2[0])  # first derivative (same length)
+
+    # onset conditions:
+    # 1) signal is above onset_thr (avoid pure noise)
+    # 2) slope is above slope_thr (meaningful rise)
+    # 3) (optional) relative-to-peak gate
+    ok = (s >= onset_thr) & (ds >= cfg.slope_thr) & (s >= 0.30 * peak_val)
+
     consec = 0
     onset_y = None
     for y in range(y0, y1 + 1):
