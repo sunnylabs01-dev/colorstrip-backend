@@ -323,6 +323,8 @@ def main() -> int:
     meta_txt.write_text(
         "\n".join(
             [
+                f"debug={getattr(result, 'debug', None)}",
+                f"method={getattr(result, 'method', None)}",
                 f"image_path={img_path}",
                 f"roi_bbox_resized={bbox}",  # bbox is in resized image coords
                 f"boundary_y_roi={result.boundary_y}",
@@ -347,6 +349,14 @@ def main() -> int:
     print(f"bbox(resized): {bbox}")
     print(f"boundary_y:   {result.boundary_y}")
     print(f"confidence:   {result.confidence:.4f}")
+    print(f"method:      {getattr(result, 'method', 'unknown')}")
+    if isinstance(getattr(result, "debug", None), dict):
+        print(f"peak_y:      {result.debug.get('peak_y', None)}")
+        print(f"onset_y:     {result.debug.get('onset_y', None)}")
+        print(f"onset_thr:   {result.debug.get('onset_thr', None)}")
+    else:
+        print("debug:       (none)")
+
     return 0
 
 
