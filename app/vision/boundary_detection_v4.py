@@ -45,11 +45,15 @@ class BoundaryV4Config:
 class BoundaryV4Result:
     boundary_y_in_roi: int
     boundary_y_in_image: int
+    roi_bbox_xywh: tuple[int, int, int, int]
+    cp_score: float
+
     roi: RoiResult
     color_signal: ColorSignalResult
     processed_signal: ProcessedSignal
     change_point: ChangePointResult
     aux: dict
+
 
 
 class BoundaryDetectorV4:
@@ -79,6 +83,9 @@ class BoundaryDetectorV4:
         return BoundaryV4Result(
             boundary_y_in_roi=boundary_y_in_roi,
             boundary_y_in_image=boundary_y_in_image,
+            roi_bbox_xywh=roi_res.bbox_xywh,
+            cp_score=float(cp_res.score),
+
             roi=roi_res,
             color_signal=sig_res,
             processed_signal=proc_res,
