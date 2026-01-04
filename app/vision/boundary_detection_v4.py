@@ -24,12 +24,21 @@ from app.vision.change_point import (
 )
 
 
+from dataclasses import dataclass, field
+
+
 @dataclass(frozen=True)
 class BoundaryV4Config:
     roi: Optional[dict] = None
-    color_signal: ColorSignalConfig = ColorSignalConfig(channel="b", stat="trimmed_mean", trim_ratio=0.15)
-    signal_processing: SignalProcessingConfig = SignalProcessingConfig(smooth="moving_average", smooth_window=9)
-    change_point: ChangePointConfig = ChangePointConfig(model="piecewise_constant", min_segment_length=20)
+    color_signal: ColorSignalConfig = field(
+        default_factory=lambda: ColorSignalConfig(channel="b", stat="trimmed_mean", trim_ratio=0.15)
+    )
+    signal_processing: SignalProcessingConfig = field(
+        default_factory=lambda: SignalProcessingConfig(smooth="moving_average", smooth_window=9)
+    )
+    change_point: ChangePointConfig = field(
+        default_factory=lambda: ChangePointConfig(model="piecewise_constant", min_segment_length=20)
+    )
 
 
 @dataclass(frozen=True)
