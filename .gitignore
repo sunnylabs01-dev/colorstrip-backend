@@ -6,6 +6,10 @@
 __pycache__/
 *.py[cod]
 
+# pytest artifacts
+.pytest_cache/
+
+
 # venv
 venv/
 .venv/
