@@ -1,4 +1,4 @@
-# app/vision/boundary_detection.py
+# app/vision/boundary_detection_v4.py
 from __future__ import annotations
 
 from dataclasses import dataclass
