@@ -14,6 +14,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from app.vision.roi import RoiExtractor
 from app.vision.color_signal import ColorSignalConfig, extract_rowwise_color_signal
 from app.vision.signal_processing import SignalProcessingConfig, process_signal
+from app.vision.change_point import ChangePointConfig, detect_change_point
 
 
 def ensure_dir(p: Path) -> None:
@@ -198,6 +199,30 @@ def main() -> None:
 
     draw_signal_plot(proc.smoothed, out_dir / "09_signal_smoothed.png", title="row-wise b* (smoothed)")
     draw_signal_plot(proc.normalized, out_dir / "10_signal_normalized.png", title="row-wise b* (robust_z)")
+
+    # 4) Change point detection (piecewise constant)
+    cp_cfg = ChangePointConfig(
+        model="piecewise_constant",
+        min_segment_length=20,
+        search_range=None,          # 필요하면 (start, end)로 제한 가능
+        expect_decrease=True,       # b*는 보통 yellow->pink에서 감소 방향
+        direction_margin=0.0,
+        return_sse_curve=True,
+    )
+    cp = detect_change_point(proc.normalized, config=cp_cfg)
+    k = int(cp.index)
+    print(f"CPD: k={k}, score={cp.score:.3f}, mean_top={cp.aux['mean_top']:.3f}, mean_bottom={cp.aux['mean_bottom']:.3f}")
+
+    # ROI 위에 빨간 boundary line 그리기
+    roi_line = roi.copy()
+    k = max(0, min(k, roi_line.shape[0] - 1))
+    cv2.line(roi_line, (0, k), (roi_line.shape[1] - 1, k), (0, 0, 255), 2)
+    save_image(out_dir / "11_roi_with_boundary_line.png", roi_line)
+
+    # SSE curve 저장
+    sse_curve = cp.aux.get("sse_curve", None)
+    if sse_curve is not None:
+        draw_signal_plot(sse_curve, out_dir / "12_cpd_sse_curve.png", title="CPD SSE (lower=better)")
 
     print("Saved:")
     for p in sorted(out_dir.glob("*.png")):
